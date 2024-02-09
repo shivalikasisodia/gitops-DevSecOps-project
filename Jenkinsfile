@@ -1,43 +1,38 @@
+@Library('my-shared-library') _
 pipeline {
     agent { label "Jenkins-Agent" }
-    environment {
-              APP_NAME = "register-app-pipeline"
+    parameters{
+
+        choice(name: 'action', choices: 'create\ndelete', description: 'Choose create/Destroy')
+        string(name: 'ImageName', description: "name of the docker build", defaultValue: 'registration-app')
+        string(name: 'GitUser', description: "GithubUsername", defaultValue: 'shivalikasisodia')
+        string(name: 'ImageTag', description: "tag of the docker build", defaultValue: 'v1')
     }
 
     stages {
-        stage("Cleanup Workspace") {
-            steps {
-                cleanWs()
+        stage('Git Checkout'){
+        when { expression {  params.action == 'create' } }
+            steps{
+            gitCheckout(
+                branch: "main",
+                url: "https://github.com/shivalikasisodia/gitops-DevSecOps-project.git"
+            )
             }
         }
 
-        stage("Checkout from SCM") {
-               steps {
-                   git branch: 'main', credentialsId: 'github', url: 'https://github.com/Ashfaque-9x/gitops-register-app'
-               }
-        }
-
         stage("Update the Deployment Tags") {
+        when { expression {  params.action == 'create' } }
             steps {
-                sh """
-                   cat deployment.yaml
-                   sed -i 's/${APP_NAME}.*/${APP_NAME}:${IMAGE_TAG}/g' deployment.yaml
-                   cat deployment.yaml
-                """
+                script{
+                    updateDeploymentTag("${params.ImageName}","${params.ImageTag}")
+                }
             }
         }
 
         stage("Push the changed deployment file to Git") {
+        when { expression {  params.action == 'create' } }
             steps {
-                sh """
-                   git config --global user.name "Ashfaque-9x"
-                   git config --global user.email "ashfaque.s510@gmail.com"
-                   git add deployment.yaml
-                   git commit -m "Updated Deployment Manifest"
-                """
-                withCredentials([gitUsernamePassword(credentialsId: 'github', gitToolName: 'Default')]) {
-                  sh "git push https://github.com/Ashfaque-9x/gitops-register-app main"
-                }
+                pushDeploymentChange("${params.GitUser}")
             }
         }
       
